@@ -1,0 +1,94 @@
+\documentclass[a4paper,twoside,10pt]{book}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[french]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{multicol}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{cuted} %to use \begin{minipage}
+\usepackage{enumitem}
+\usepackage[format=plain,labelfont={it},textfont=it,font=large]{caption} % to have legends in italic
+\usepackage{mathptmx}
+\usepackage{helvet}
+\usepackage{hyperref}
+\usepackage{wrapfig}
+\usepackage{nicefrac}
+\usepackage{units}
+\usepackage{amsmath}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[RE,LO]{{\Huge\textbf{\textcolor{red}{\fontfamily{phv}\selectfont f}\textcolor{blue}{\fontfamily{phv}\selectfont t}\textcolor{lightgray}{\fontfamily{phv}\selectfont :pedia}}}}
+\fancyhead[LE]{\large\fontfamily{phv}\selectfont Numéro <@numero@>}
+\fancyhead[RO]{\large\fontfamily{phv}\selectfont <@categorie@>}
+\fancyfoot[LE,RO]{\thepage}
+\renewcommand{\footrulewidth}{0.6pt}
+\renewcommand{\headrulewidth}{0.6pt}
+
+\setlength{\columnsep}{1cm}
+
+\setlength{\parindent}{0cm}
+\setlength{\parskip}{0.2cm}
+
+\setlength{\headsep}{1.0cm}
+\setlength{\footskip}{1.0cm}
+\setlength{\voffset}{-0.5cm}
+
+\frenchsetup{StandardItemLabels=true} %to have bullet in lists in first level
+
+%below we change section and subsection
+\makeatletter
+\renewcommand\section{\@startsection {section}{1}{\z@}%
+	{-0.4ex \@plus -1ex \@minus -.2ex}%
+	{0.2ex \@plus 0.2ex}%
+	{\normalfont\Large\bfseries\sffamily}}
+\renewcommand\subsection{\@startsection {subsection}{1}{\z@}%
+	{-0.4ex \@plus -1ex \@minus -.2ex}%
+	{0.2ex \@plus 0.2ex}%
+	{\normalfont\large\bfseries\itshape\sffamily}}
+\makeatother
+
+%below we change spacing after captions
+\setlength{\belowcaptionskip}{-15pt}
+
+\raggedbottom
+
+\begin{document}
+
+\setcounter{page}{<@firstpagenumber@>}
+
+		
+\vspace*{1.0cm}
+\large{\fontfamily{phv}\selectfont <@categorie@>}
+\vspace{-0.2cm}
+
+\LARGE{\textbf{\fontfamily{phv}\selectfont <@titre@>}}
+\vspace{0.1cm}
+
+\rightline{\large{\fontfamily{phv}\selectfont <@auteur@>}}
+\vspace{0.3cm}
+
+\large{\textit{<@abstract@>}}
+\vspace{0.2cm}
+		
+
+\begin{multicols}{2}
+
+<@content@>
+
+\section*{Sources}
+
+\begin{enumerate}[label=[\arabic*{]}]
+	\item blabla
+\end{enumerate}
+
+
+\end{multicols}
+
+
+\end{document}
+
