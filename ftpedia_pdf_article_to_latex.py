@@ -48,11 +48,11 @@ def sanitize_spaces(s):
 
 # check if the number of arguments is correct
 if len(sys.argv) != 6:
-    error_message('Usage: extract_content_from_pdf.py <pdf_path> -f <first_page> -l <last_page>')
+    error_message('Usage: ftpedia_pdf_article_to_latex.py <pdf_file> -f <first_page> -l <last_page>')
     sys.exit(1)
 
 # prcocess the arguments
-pdf_path = sys.argv[1]
+pdf_file = sys.argv[1]
 
 # the first page number is introduced by '-f' or '--first'
 if sys.argv[2] in ['-f', '--first']:
@@ -67,26 +67,26 @@ fpagenum = first_page
 lpagenum = last_page
 
 # check if the PDF filename has the good format for an ftpedia issue
-if not re.match(r'ftpedia-[0-9]{4}-[0-9].pdf', pdf_path):
+if not re.match(r'ftpedia-[0-9]{4}-[0-9].pdf', pdf_file):
     error_message('The PDF file is not a ftpedia issue.')
     sys.exit(1)
 
 # check if the PDF file exists
-if not os.path.exists(pdf_path):
+if not os.path.exists(pdf_file):
     print('The PDF file does not exist.')
     # ask the user if he wants to download the file
     download = input('Do you want to download the file? [y/n] ')
     if download == 'y':
         # get the year from the file name
-        year = re.search(r'ftpedia-([0-9]{4})-[0-9].pdf', pdf_path).group(1)
+        year = re.search(r'ftpedia-([0-9]{4})-[0-9].pdf', pdf_file).group(1)
         # get the issue number from the file name
-        issue = re.search(r'ftpedia-[0-9]{4}-([0-9]).pdf', pdf_path).group(1)
+        issue = re.search(r'ftpedia-[0-9]{4}-([0-9]).pdf', pdf_file).group(1)
         # generate the url of the file
         urlftpedia = 'https://www.ftcommunity.de/ftpedia/{0}/{0}-{1}/ftpedia-{0}-{1}.pdf'.format(year, issue)
         # download the file
         os.system('wget {}'.format(urlftpedia))
         # check if the download was successful
-        if os.path.exists(pdf_path):
+        if os.path.exists(pdf_file):
             print('The file has been downloaded successfully.')
         else:
             error_message('An error occurred while downloading the file.')
@@ -128,7 +128,7 @@ if os.system('pdfimages -v >/dev/null') != 0:
 info_message('Extracting the text content...')
 
 # Using command pdftk to extract the specified pages
-os.system('pdftk {} cat {}-{} output temp.pdf'.format(pdf_path, first_page, last_page))
+os.system('pdftk {} cat {}-{} output temp.pdf'.format(pdf_file, first_page, last_page))
 #os.system('pdftotext temp.pdf')
 
 #-----------------------------------------------------------------------------------------#
@@ -309,7 +309,7 @@ if not os.path.exists('images'):
     os.makedirs('images')
 
 # Using command pdfimages to extract the images from the PDF file
-os.system('pdfimages -q -png -f {0} -l {1} {2} images/'.format(first_page, last_page, pdf_path))
+os.system('pdfimages -q -png -f {0} -l {1} {2} images/'.format(first_page, last_page, pdf_file))
 
 # Rename the images
 files = os.listdir('images')
@@ -367,7 +367,7 @@ tags = ['<@numero@>', '<@auteur@>', '<@categorie@>', '<@titre@>', '<@firstpagenu
 infos = ['123456', 'John Doe', 'Optique', 'Détecteur d\'ondes gravitationnelles', '666', 'Lorem ipsum dolor']
 
 # author's name to the user
-infos[0] = pdf_path.split('-')[2].split('.')[0] + '/' + pdf_path.split('-')[1]
+infos[0] = pdf_file.split('-')[2].split('.')[0] + '/' + pdf_file.split('-')[1]
 infos[1] = author
 infos[2] = category
 infos[3] = title
@@ -386,7 +386,7 @@ infos[5] = translate_text(abstract)
 tplfilename = 'template.tex'
 
 # get filename without extension of the pdf file
-texfilename = pdf_path.split('.')[0] + '_FR.tex'
+texfilename = pdf_file.split('.')[0] + '_FR.tex'
 
 # create a copy of file 'template.tex', the name of the copy is 'filename.tex'
 os.system('cp template.tex ' + texfilename)
