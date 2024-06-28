@@ -44,6 +44,10 @@ def sanitize_spaces(s):
         s = s.replace('   ', ' ', s.count('   ') - 1)
     return s
 
+# Function that puts the first letter of a string in uppercase
+def capitalize(s):
+    return s[0].upper() + s[1:]
+
 ##-- Process arguments
 
 # check if the number of arguments is correct
@@ -144,7 +148,7 @@ with open('temp1.txt', 'r') as f:
     while not line.strip():
         line = f.readline()
     category = line.strip()
-    category = category[0].upper() + category[1:]
+    category = capitalize(category)
     while line.strip():
         line = f.readline()
         title = title + line.strip() + ' '
@@ -374,7 +378,7 @@ infos[3] = title
 infos[4] = str(first_page)
 
 # translate the category and the title and the abstract
-infos[2] = translate_text(infos[2])
+infos[2] = capitalize(translate_text(infos[2]))
 infos[3] = translate_text(infos[3])
 infos[5] = translate_text(abstract)
 
