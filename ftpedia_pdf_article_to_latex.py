@@ -15,6 +15,7 @@ import os
 import re
 import boto3
 import subprocess
+import requests, uuid, json
 
 ##-- Functions
 
@@ -27,11 +28,32 @@ def info_message(message):
     print('\033[1;32m' + message + '\033[0m')
 
 # Function to translate the text content
-def translate_text(text):
+def aws_translate_german_text(text):
     # send the text to the AWS Translate service
     translate = boto3.client(service_name='translate', region_name='eu-west-1', use_ssl=True)
     result = translate.translate_text(Text=text, SourceLanguageCode="de", TargetLanguageCode="fr")
     return result.get('TranslatedText')
+
+def azure_translate_german_text(endpoint, key, location, to_lang, text):
+    # parameters for the Azure translation service
+    path = '/translate'
+    constructed_url = endpoint + path
+    params = {
+        'api-version': '3.0',
+        'from': 'de',
+        'to': to_lang
+    }
+    headers = {
+        'Ocp-Apim-Subscription-Key': key,
+        'Ocp-Apim-Subscription-Region': location,
+        'Content-type': 'application/json',
+        'X-ClientTraceId': str(uuid.uuid4())
+    }
+    body = [{
+        'text': text
+    }]
+    response = requests.post(constructed_url, params=params, headers=headers, json=body)
+    return response.json()[0]['translations'][0]['text']
 
 # Function to sanitize the spaces in a string
 def sanitize_spaces(s):
@@ -185,7 +207,7 @@ with open('temp1.txt', 'r') as f:
         line = f.readline()
         startbody += 1
     while line.strip():
-        abstract = abstract + line
+        abstract = abstract + line.strip() + ' '
         line = f.readline()
         startbody += 1
 
@@ -332,11 +354,23 @@ for file in files:
 
 ##-- Translate the text content
 
-# Tell the user that the script is translating the text content
+# tell the user that the script is translating the text content
 info_message('Translating the text content...')
 
+# check the presence of the Azure key file
+if not os.path.exists('azurekey.txt'):
+    error_message('The Azure key file azurekey.txt does not exist.')
+    error_message('Please create the file and put the Azure key in it.')
+    sys.exit(1)
+
+# parameters for the Azure translation service
+with open('azurekey.txt', 'r') as file:
+    key = file.read().strip()
+endpoint = 'https://api.cognitive.microsofttranslator.com/'
+location = 'westeurope'
+to_lang = 'fr'
+
 # send the lines to the AWS Translate service
-translate = boto3.client(service_name='translate', region_name='eu-west-1', use_ssl=True)
 filepath = 'temp4.txt'
 translatedtext = ''
 with open(filepath) as fp:
@@ -345,8 +379,8 @@ with open(filepath) as fp:
     while line :
         linestripped = line
         linestripped.strip()
-        result = translate.translate_text(Text=linestripped,SourceLanguageCode="de",TargetLanguageCode="fr")
-        translatedtext += result.get('TranslatedText')
+        result = azure_translate_german_text(endpoint, key, location, to_lang, linestripped)
+        translatedtext += result
         line = fp.readline()
         cnt += 1
 
@@ -378,9 +412,9 @@ infos[3] = title
 infos[4] = str(first_page)
 
 # translate the category and the title and the abstract
-infos[2] = capitalize(translate_text(infos[2]))
-infos[3] = translate_text(infos[3])
-infos[5] = translate_text(abstract)
+infos[2] = capitalize(azure_translate_german_text(endpoint, key, location, to_lang, infos[2]))
+infos[3] = azure_translate_german_text(endpoint, key, location, to_lang, infos[3])
+infos[5] = azure_translate_german_text(endpoint, key, location, to_lang, abstract)
 
 # # let's check the collected informations
 # for i, tag in enumerate(tags):
