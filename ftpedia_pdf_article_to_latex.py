@@ -470,7 +470,7 @@ tplfig = '''
 with open(texfilename, 'r') as file:
     lines = file.readlines()
     for i, line in enumerate(lines):
-        if line.startswith('Figure '):
+        if line.startswith('Figure ') or line.startswith('Fig. '):
             lines[i] = tplfig.replace('<@numfig@>', line.split(' ')[1].rstrip(':').rstrip())
             lines[i] = lines[i].replace('<@caption@>', line.split(':')[1].strip())
 
