@@ -16,18 +16,20 @@ import re
 import boto3
 import subprocess
 import requests, uuid, json
+from pdfminer.high_level import extract_pages
+from pdfminer.layout import LTTextContainer, LTTextLineHorizontal, LTChar
 
 ##-- Functions
 
-# Function to display error message in red and bold characters
+# Displays error message in red and bold characters
 def error_message(message):
     print('\033[1;31m' + message + '\033[0m')
 
-# Function to display informative message in green and bold characters
+# Displays informative message in green and bold characters
 def info_message(message):
     print('\033[1;32m' + message + '\033[0m')
 
-# Function to translate the text content
+# Translates the text content
 def aws_translate_german_text(text):
     # send the text to the AWS Translate service
     translate = boto3.client(service_name='translate', region_name='eu-west-1', use_ssl=True)
@@ -55,7 +57,7 @@ def azure_translate_german_text(endpoint, key, location, to_lang, text):
     response = requests.post(constructed_url, params=params, headers=headers, json=body)
     return response.json()[0]['translations'][0]['text']
 
-# Function to sanitize the spaces in a string
+# Sanitize the spaces in a string
 def sanitize_spaces(s):
     # replace sequences of 4 spaces or more by 3 spaces
     # until there are no more sequences of 4 spaces or more
@@ -66,9 +68,62 @@ def sanitize_spaces(s):
         s = s.replace('   ', ' ', s.count('   ') - 1)
     return s
 
-# Function that puts the first letter of a string in uppercase
+# Puts the first letter of a string in uppercase
 def capitalize(s):
     return s[0].upper() + s[1:]
+
+# Detects if the the text of a line is aligned to the right
+def is_right_aligned(line):
+    # if the line contains only spaces, then it is not considered as right aligned
+    if line.strip() == '':
+        print("Line is empty or contains only spaces, not right aligned.")
+        return False
+    # if the line starts with at least 20 spaces, then it is right aligned
+    if re.match(r'^\s{20,}', line):
+        # print the line to debug
+        print("Line is right aligned: '%s'" % line.strip())
+        return True
+    # otherwise, it is not right aligned
+    return False
+
+# Get the abstract of the article
+def get_abstract_from_pdf(pdf_file):
+    abstract = ''
+    # get first page
+    page1 = next(extract_pages(pdf_file))
+    element_index = 0
+    for element in page1:
+        if isinstance(element, LTTextContainer):
+            container_size = element.width
+            if element_index >= 3 and container_size >= 400:
+                for text_line in element:
+                    if isinstance(text_line, LTTextLineHorizontal):
+                        abstract += text_line.get_text().strip() + ' '
+        element_index += 1
+    return abstract.strip()
+
+# Get the title of the article
+def get_title_from_pdf(pdf_file):
+    title = ''
+    # get first page
+    page1 = next(extract_pages(pdf_file))
+    element_index = 0
+    for element in page1:
+        if isinstance(element, LTTextContainer):
+            for text_line in element:
+                # the first lines found with font size 20 are the title
+                if isinstance(text_line, LTTextLineHorizontal):
+                    character = next(iter(text_line), None)
+                    if isinstance(character, LTChar):
+                        character.size = round(character.size)
+                        font_size = character.size
+                        if font_size == 20 and element_index > 1:
+                            title += text_line.get_text().strip() + ' '
+                            break
+        if title:
+            break
+        element_index += 1
+    return title.strip()
 
 ##-- Process arguments
 
@@ -158,27 +213,14 @@ os.system('pdftk {} cat {}-{} output temp.pdf'.format(pdf_file, first_page, last
 #os.system('pdftotext temp.pdf')
 
 #-----------------------------------------------------------------------------------------#
-# use the command pdftotext on temp.pdf to convert pdf to text preservung layout
+# use the command pdftotext on temp.pdf to convert pdf to text preserving layout
 os.system('pdftotext -q -layout temp.pdf temp1.txt')
 
-# extract the category of the article: it's the first non empty line after the header
+# extract category,title and author of the article
 category = ''
 title = ''
-with open('temp1.txt', 'r') as f:
-    line = f.readline()
-    line = f.readline()
-    while not line.strip():
-        line = f.readline()
-    category = line.strip()
-    category = capitalize(category)
-    while line.strip():
-        line = f.readline()
-        title = title + line.strip() + ' '
-print('CATEGORY: ' + category)
-print('TITLE: ' + title)
-
-# find the author of the article: it's the first non empty line after the second block of empty lines
 author = ''
+abstract = ''
 cptr = 0
 with open('temp1.txt', 'r') as f:
     line = f.readline()
@@ -187,29 +229,35 @@ with open('temp1.txt', 'r') as f:
     while not line.strip():
         line = f.readline()
         cptr += 1
+    category = line.strip()
+    category = capitalize(category)
     while line.strip():
         line = f.readline()
         cptr += 1
-    line = f.readline()
-    cptr += 1
-    author = line.strip()
-
-# find the abstract: it's the block of text after the author and before the first empty line
-# start is the line number of the beginning of the body of the article
-abstract = ''
-startbody = cptr
-with open('temp1.txt', 'r') as f:
-    for i in range(cptr):
-        line = f.readline()
-    line = f.readline()
-    startbody += 1
+        if not is_right_aligned(line):
+            title = title + line.strip() + ' '
+        else:
+            author = line.strip()
+            line = f.readline()
+            cptr += 1
+            break
     while not line.strip():
         line = f.readline()
-        startbody += 1
-    while line.strip():
-        abstract = abstract + line.strip() + ' '
+        cptr += 1
+    if author == '' and is_right_aligned(line):
+        author = line.strip()
         line = f.readline()
-        startbody += 1
+        cptr += 1
+    while line.strip():
+        line = f.readline()
+        cptr += 1
+print('CATEGORY: ' + category)
+title = get_title_from_pdf('temp.pdf')
+print('TITLE: ' + title)
+print('AUTHOR: ' + author)
+abstract = get_abstract_from_pdf('temp.pdf')
+print('ABSTRACT: ' + abstract)
+startbody = cptr
 
 # find the line numbers of the lines with a page number
 pagenumbers = []
@@ -353,7 +401,7 @@ for file in files:
 
 
 ##-- Translate the text content
-
+sys.exit(0)
 # tell the user that the script is translating the text content
 info_message('Translating the text content...')
 
