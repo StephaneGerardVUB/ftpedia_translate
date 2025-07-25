@@ -17,7 +17,7 @@ import boto3
 import subprocess
 import requests, uuid
 from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTTextContainer, LTTextLineHorizontal, LTChar, LTFigure
+from pdfminer.layout import LTTextContainer, LTTextLineHorizontal, LTChar, LTFigure, LTTextBoxHorizontal
 
 ##-- Functions
 
@@ -87,6 +87,21 @@ def get_abstract_from_pdf(pdf_file):
                         abstract += text_line.get_text().strip() + ' '
         element_index += 1
     return abstract.strip()
+
+# Get last line of abstract (this will be used to know where the body of the article starts)
+def get_last_line_of_abstract(pdf_file):
+    last_line = ''
+    page1 = next(extract_pages(pdf_file))
+    element_index = 0
+    for element in page1:
+        if isinstance(element, LTTextContainer):
+            container_size = element.width
+            if element_index >= 3 and container_size >= 400:
+                for text_line in element:
+                    if isinstance(text_line, LTTextLineHorizontal):
+                        last_line = text_line.get_text()
+        element_index += 1
+    return last_line
 
 # Get the title of the article
 def get_title_from_pdf(pdf_file):
@@ -182,27 +197,20 @@ def get_beginning_of_body(pdf_file):
     page1 = next(extract_pages(pdf_file))
     element_index = 0
     line_count = 0
-    end_abstract = 0
-    for element in page1:
-        if isinstance(element, LTTextContainer):
-            #print(f"Element {element_index}: {element}")
-            container_size = element.width
+    elements = list(page1)
+    for element in elements:
+        if element_index > 3:
+            break
+        if isinstance(element, LTTextBoxHorizontal):
             for text_line in element:
-                #print(f"  Text line: {text_line.get_text()}")
-                if isinstance(text_line, LTTextLineHorizontal):
-                    line_count += 1
-                    if element_index >= 3 and container_size >= 400 and end_abstract == 0:
-                        end_abstract = line_count
-                    if element_index >= 3 and container_size >= 400 and end_abstract > 0:
-                        end_abstract += 1
-                    if element_index >= 3 and container_size < 400 and end_abstract > 0:
-                        break
+                #print(text_line.get_text())
+                line_count += 1
         element_index += 1
-    return end_abstract + 1
+    return line_count
 
 # Generates an array that will be used to merge the pictures that are part of the same figure
-def generate_array_figures():
-    pages = list(extract_pages('temp.pdf'))
+def generate_array_figures(pdf_file):
+    pages = list(extract_pages(pdf_file))
 
     array_picture = []
     page_number = 1
@@ -214,8 +222,6 @@ def generate_array_figures():
 
     for page in pages:
         for element in page:
-            # print the content of the element no matter what it is
-            print(element)
             if isinstance(element, LTFigure):
                 pos_y0_cur = element.y0
                 pos_y1_cur = element.y1
@@ -358,7 +364,15 @@ author = get_author_from_article(article_content)
 print('AUTHOR: ' + author)
 abstract = get_abstract_from_pdf('temp.pdf')
 print('ABSTRACT: ' + abstract)
-startbody = get_beginning_of_body('temp.pdf')
+
+# find the line where the body of the article starts
+last_line_of_abstract = get_last_line_of_abstract('temp.pdf')
+startbody = 0
+with open('temp1.txt', 'r') as f:
+    for line in f:
+        startbody += 1
+        if line.strip() == last_line_of_abstract.strip():
+            break
 
 # put all the text of the article in a list of strings
 bodytext = []
@@ -493,7 +507,7 @@ for file in files:
         os.rename('images/' + file, 'images/abb' + num + '.png')
 
 # Merging the pictures that are part of the same figure
-array_pics = generate_array_figures()
+array_pics = generate_array_figures('temp.pdf')
 fig_num = 1
 for pics in array_pics:
     str_lst_pics = ''
