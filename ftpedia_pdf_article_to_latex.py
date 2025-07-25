@@ -15,9 +15,9 @@ import os
 import re
 import boto3
 import subprocess
-import requests, uuid, json
+import requests, uuid
 from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTTextContainer, LTTextLineHorizontal, LTChar
+from pdfminer.layout import LTTextContainer, LTTextLineHorizontal, LTChar, LTFigure
 
 ##-- Functions
 
@@ -72,20 +72,6 @@ def sanitize_spaces(s):
 def capitalize(s):
     return s[0].upper() + s[1:]
 
-# Detects if the the text of a line is aligned to the right
-def is_right_aligned(line):
-    # if the line contains only spaces, then it is not considered as right aligned
-    if line.strip() == '':
-        print("Line is empty or contains only spaces, not right aligned.")
-        return False
-    # if the line starts with at least 20 spaces, then it is right aligned
-    if re.match(r'^\s{20,}', line):
-        # print the line to debug
-        print("Line is right aligned: '%s'" % line.strip())
-        return True
-    # otherwise, it is not right aligned
-    return False
-
 # Get the abstract of the article
 def get_abstract_from_pdf(pdf_file):
     abstract = ''
@@ -124,6 +110,147 @@ def get_title_from_pdf(pdf_file):
             break
         element_index += 1
     return title.strip()
+
+# Extract article content using pdfminer
+# We will extract the lines of text of the article, and for
+# each line, we will keep track of its page number,  of its
+# text container number, of its layout on the page, and of
+# its font name and size.
+# These information will be used stored in an array of arrays:
+# [page_number, text container number, layout, font name, font size, text]
+# Values for layout are:
+#   lc -> left column
+#   rc -> right column
+#   fp -> full page width
+def extract_article_content(pdf_file):
+    Article_Content = []
+    for page_layout in extract_pages(pdf_file):
+        element_number = 0
+        for element in page_layout:
+            if isinstance(element, LTTextContainer):
+                # get number of the text container
+                txtcontainer_number = element_number
+                for text_line in element:
+                    if isinstance(text_line, LTTextLineHorizontal):
+                        # page number
+                        page_number = page_layout.pageid
+                        # position of the text
+                        pos_left = element.x0
+                        pos_right = element.x1
+                        if pos_left > 60 and pos_left < 300:
+                            if pos_right < 300:
+                                layout = 'lc'
+                            else:
+                                layout = 'fp'
+                        else:
+                            layout = 'rc'
+                        # font size
+                        character = next(iter(text_line), None)
+                        font_size = round(character.size)
+                        # font name
+                        font_name = character.fontname
+                        Article_Content.append([
+                            page_number,
+                            txtcontainer_number,
+                            layout,
+                            font_name,
+                            font_size,
+                            text_line.get_text()
+                        ])
+                element_number += 1
+    return Article_Content
+
+# Get the author of the article
+def get_author_from_article(article_content):
+    for line in article_content:
+        if line[0] == 1 and line[1] == 4 and line[2] == 'rc' and line[4] == 12:
+            return line[5].strip()
+        if line[1] > 4:
+            return ''
+
+# Get the category of the article
+def get_category_from_article(article_content):
+    for line in article_content:
+        if line[0] == 1 and line[1] >= 2 and line[3].endswith('ArialMT') and line[4] == 12:
+            return line[5].strip()
+        if line[0] > 1:
+            return ''
+
+# Get the beginning of the body of the article
+def get_beginning_of_body(pdf_file):
+    # get first page
+    page1 = next(extract_pages(pdf_file))
+    element_index = 0
+    line_count = 0
+    end_abstract = 0
+    for element in page1:
+        if isinstance(element, LTTextContainer):
+            #print(f"Element {element_index}: {element}")
+            container_size = element.width
+            for text_line in element:
+                #print(f"  Text line: {text_line.get_text()}")
+                if isinstance(text_line, LTTextLineHorizontal):
+                    line_count += 1
+                    if element_index >= 3 and container_size >= 400 and end_abstract == 0:
+                        end_abstract = line_count
+                    if element_index >= 3 and container_size >= 400 and end_abstract > 0:
+                        end_abstract += 1
+                    if element_index >= 3 and container_size < 400 and end_abstract > 0:
+                        break
+        element_index += 1
+    return end_abstract + 1
+
+# Generates an array that will be used to merge the pictures that are part of the same figure
+def generate_array_figures():
+    pages = list(extract_pages('temp.pdf'))
+
+    array_picture = []
+    page_number = 1
+    pic_number = 1
+    pos_y0_prev = 0
+    pos_y0_cur = 0
+    pos_y1_cur = 0
+    prev_was_a_pic = False
+
+    for page in pages:
+        for element in page:
+            # print the content of the element no matter what it is
+            print(element)
+            if isinstance(element, LTFigure):
+                pos_y0_cur = element.y0
+                pos_y1_cur = element.y1
+                if abs(pos_y1_cur - pos_y0_prev) >= 2 and prev_was_a_pic:
+                    array_picture.append([page_number, -1])                
+                array_picture.append([page_number, pic_number])
+                pic_number += 1
+                pos_y0_prev = pos_y0_cur
+                prev_was_a_pic = True
+            else:
+                array_picture.append([page_number, -1])
+        page_number += 1
+
+    array_figure = []
+    for page in pages:
+        page_number = page.pageid
+        found_figure = False
+        pic_numbers = []
+        for pic in array_picture:
+            if pic[0] == page_number:
+                if pic[1] != -1:
+                    if not found_figure:
+                        pic_numbers = [pic[1]]
+                        found_figure = True    
+                    else:
+                        pic_numbers.append(pic[1])
+                        found_figure = True
+                else:
+                    if found_figure:
+                        array_figure.append([page_number, pic_numbers])
+                        found_figure = False
+                        pic_numbers = []
+
+    return array_figure
+
 
 ##-- Process arguments
 
@@ -210,7 +337,9 @@ info_message('Extracting the text content...')
 
 # Using command pdftk to extract the specified pages
 os.system('pdftk {} cat {}-{} output temp.pdf'.format(pdf_file, first_page, last_page))
-#os.system('pdftotext temp.pdf')
+
+# Extract the text content from temp.pdf using pdfminer
+article_content = extract_article_content('temp.pdf')
 
 #-----------------------------------------------------------------------------------------#
 # use the command pdftotext on temp.pdf to convert pdf to text preserving layout
@@ -221,51 +350,15 @@ category = ''
 title = ''
 author = ''
 abstract = ''
-cptr = 0
-with open('temp1.txt', 'r') as f:
-    line = f.readline()
-    line = f.readline()
-    cptr = 2
-    while not line.strip():
-        line = f.readline()
-        cptr += 1
-    category = line.strip()
-    category = capitalize(category)
-    while line.strip():
-        line = f.readline()
-        cptr += 1
-        if not is_right_aligned(line):
-            title = title + line.strip() + ' '
-        else:
-            author = line.strip()
-            line = f.readline()
-            cptr += 1
-            break
-    while not line.strip():
-        line = f.readline()
-        cptr += 1
-    if author == '' and is_right_aligned(line):
-        author = line.strip()
-        line = f.readline()
-        cptr += 1
-    while line.strip():
-        line = f.readline()
-        cptr += 1
+category = get_category_from_article(article_content)
 print('CATEGORY: ' + category)
 title = get_title_from_pdf('temp.pdf')
 print('TITLE: ' + title)
+author = get_author_from_article(article_content)
 print('AUTHOR: ' + author)
 abstract = get_abstract_from_pdf('temp.pdf')
 print('ABSTRACT: ' + abstract)
-startbody = cptr
-
-# find the line numbers of the lines with a page number
-pagenumbers = []
-with open('temp1.txt', 'r') as f:
-    for i, line in enumerate(f):
-        if line.strip().isdigit() and int(line.strip()) >= fpagenum and int(line.strip()) <= lpagenum:
-            pagenumbers.append(i + 1)
-print(pagenumbers)
+startbody = get_beginning_of_body('temp.pdf')
 
 # put all the text of the article in a list of strings
 bodytext = []
@@ -399,6 +492,18 @@ for file in files:
         # rename the file
         os.rename('images/' + file, 'images/abb' + num + '.png')
 
+# Merging the pictures that are part of the same figure
+array_pics = generate_array_figures()
+fig_num = 1
+for pics in array_pics:
+    str_lst_pics = ''
+    for pic in pics[1]:
+        str_lst_pics += 'abb' + str(pic) + '.png '
+    # execute the command to merge the images, we will use the convert command
+    os.system('cd images;magick convert ' + str_lst_pics + ' -append fig' + str(fig_num) + '.png')
+    fig_num += 1
+os.system('cd images;rm -f abb*.png')
+
 
 ##-- Translate the text content
 sys.exit(0)
@@ -508,7 +613,7 @@ with open('temp5.txt', 'r') as file:
 tplfig = '''
 \\begin{minipage}[h]{7.5cm}
 	\\centering
-    \\includegraphics[width=7.5cm]{images/abb<@numfig@>.png}
+    \\includegraphics[width=7.5cm]{images/fig<@numfig@>.png}
     \\captionof{figure}{<@caption@>}
     \\vspace{0.6cm}
 \\end{minipage}
