@@ -1,0 +1,80 @@
+\documentclass{ftpedia}
+
+% --- magazine issue shown in the running header -----------------------------
+\ftpediaissue{2026}{3}
+
+% --- article metadata -------------------------------------------------------
+\rubrik{Modell}
+\titel{Beispielartikel: ein Modell im Maßstab 1:10}
+\autor{Max Mustermann}
+
+\begin{document}
+
+\artikelkopf
+
+\begin{ftabstract}
+Dies ist ein Beispiel für den typografischen Aufbau eines ft:pedia-Artikels:
+Rubrik, Titel, Autor und ein kursive gesetzter Vorspann über die volle
+Satzbreite, gefolgt vom zweispaltigen Fließtext.
+\end{ftabstract}
+
+\begin{multicols}{2}
+
+\section{Prinzip und Geschichte}
+
+Der Vorläufer des Fotoapparats eignet sich prima als schmuckes Schauobjekt
+oder zum perspektivischen Zeichnen. Eine \emph{Camera obscura} ist eine dunkle
+Kammer, in die Licht durch ein kleines Loch fällt.\footnote{Eine Fußnote wird
+wie gewohnt mit \texttt{\textbackslash footnote} gesetzt.}
+
+Die Brennweite beträgt $f = 103\,\mathrm{mm}$, und für den Winkel gilt
+\begin{equation}
+  \cos\beta = \frac{a^{2}-b^{2}+c^{2}}{2ac} \tag{1}
+\end{equation}
+
+\subsection{1.1 Aufbau}
+
+Als besonders vielseitig erweist sich der Sternmotor. Die Bauteile sind:
+
+\begin{itemize}
+  \item Grundbaustein 15,
+  \item Drehscheibe 60,
+  \item Rastkupplung.
+\end{itemize}
+
+\begin{lstlisting}
+1 import io
+2 while true:
+3   if IO.readPin(C_PIN_05):
+4     IO.writePin(C_PIN_02, 1)
+\end{lstlisting}
+
+In Zeile 3 wird ein Taster abgefragt; der Befehl
+\texttt{print(IO.readPin(pin))} gibt den Wert auf dem Terminal aus.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox[c][35mm][c]{0.85\linewidth}{\centering Abbildungsplatzhalter}}
+  \caption{Prinzip der Camera obscura}
+\end{figure}
+
+\section{Ergebnisse}
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lrr}
+    \hline
+    Motor & Zylinder & Leistung \\
+    \hline
+    SP1  & 1 & 10\,W \\
+    V2P  & 2 & 18\,W \\
+    \hline
+  \end{tabular}
+  \caption{Übersicht der Modellvarianten}
+\end{table}
+
+Weitere Informationen stehen auf der Projektseite \url{ftpedia.de}.
+
+\end{multicols}
+
+\end{document}
