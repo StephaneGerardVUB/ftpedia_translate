@@ -65,3 +65,8 @@ python3 md2latex.py --magazine ftpedia-2026-1 --limit 2
 
 Les clés API, les PDF sources (`ftpedia-*.pdf`) et les résultats (`output/`)
 sont exclus du dépôt par `.gitignore`. Ne commitez jamais de clé.
+
+## Licence
+
+Ce projet est distribué sous **Apache License 2.0** — voir le fichier
+[`LICENSE`](LICENSE).
