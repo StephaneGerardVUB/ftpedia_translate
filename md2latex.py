@@ -39,6 +39,7 @@ LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()]|\([^)]*\))*)\)")
 
 INLINE_RE = re.compile(
     r"(?P<code>`[^`]+`)"
+    r"|(?P<math>\$[^$\n]+\$)"
     r"|(?P<link>\[[^\]]*\]\((?:[^()]|\([^)]*\))*\))"
     r"|(?P<bi>\*\*\*[^*]+\*\*\*)"
     r"|(?P<bold>\*\*[^*]+\*\*)"
@@ -164,6 +165,8 @@ class Converter:
             raw = match.group(0)
             if kind == "code":
                 parts.append(r"\texttt{" + escape_text(raw[1:-1]) + "}")
+            elif kind == "math":
+                parts.append(r"\(" + latex_math(raw[1:-1]) + r"\)")
             elif kind == "link":
                 link = LINK_RE.match(raw)
                 anchor = self.inline(link.group(1))

@@ -62,6 +62,7 @@ supprimés.
 | `1. item` | `enumerate` |
 | bloc de code (fenced) | `lstlisting` |
 | `$$ … $$` | `\[ … \]` |
+| `$…$` (inline) | `\(…\)` |
 | `**gras**` | `\textbf{…}` |
 | `*italique*` | `\emph{…}` |
 | `***gras-italique***` | `\textbf{\emph{…}}` |
@@ -98,6 +99,8 @@ au point d'appel sous forme de `\footnote{…}`.
 ## Maths
 
 - Chaque ligne `$$ … $$` devient `\[ … \]`.
+- Les formules inline `$…$` deviennent `\( … \)` (mêmes conversions de
+  symboles que les formules hors ligne).
 - Le contenu est déjà du LaTeX (produit par `split_ftpedia.py`) : fractions,
   racines, exposants, `\tag{n}` sont conservés tels quels.
 - Les mots traduits à l'intérieur d'une formule sont déjà encadrés par

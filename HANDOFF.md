@@ -86,7 +86,7 @@ python3 split_ftpedia.py --translate-only --name ftpedia-2026-1 \
 - Gère : métadonnées, chapô, sections, paragraphes (échappement LaTeX),
   gras/italique/code inline, liens (`\ftpediahref` bleu souligné), listes,
   code (`lstlisting`), tableaux (`tabularx`, `longtable` si >25 lignes),
-  maths `\[…\]`, notes (`\footnote`), images (largeur relative au DPI),
+  maths `\[…\]` et `\(…\)` (inline), notes (`\footnote`), images (largeur relative au DPI),
   légendes `\caption*`, figures/tableaux pleine largeur (bascule multicols).
 - Symboles Unicode des formules (grecques, ∆, ×, ≈, →, °…) convertis en
   commandes LaTeX : les polices mathématiques CM n'ont pas ces glyphes.
