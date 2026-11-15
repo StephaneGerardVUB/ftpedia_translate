@@ -170,4 +170,40 @@
   \fi
 }
 
+% ---------------------------------------------------------------------------
+% Text flowing around the silhouette of an illustration (prototype)
+%   #1 image   #2 width   #3 height   #4 first indent
+%   #5 \parshape command                #6 caption
+% ---------------------------------------------------------------------------
+\newdimen\ftp@flow@start
+\newenvironment{ftpediaflow}[6]{%
+  \def\ftp@flow@image{#1}%
+  \def\ftp@flow@width{#2}%
+  \def\ftp@flow@height{#3}%
+  \def\ftp@flow@first{#4}%
+  \def\ftp@flow@shape{#5}%
+  \def\ftp@flow@caption{#6}%
+  \par\noindent
+  \begingroup
+  \setlength{\parindent}{0pt}%
+  \ftp@flow@start=\pagetotal
+  \ftp@flow@shape
+  \noindent
+  \kern-\dimexpr\ftp@flow@first\relax
+  \rlap{\begin{picture}(0,0)%
+    \put(0,\dimexpr\baselineskip-\ftp@flow@height\relax){%
+      \includegraphics[width=\ftp@flow@width,height=\ftp@flow@height]{\ftp@flow@image}}%
+    \put(0,\dimexpr\baselineskip-\ftp@flow@height-4pt\relax){%
+      \parbox[t]{\ftp@flow@width}{\centering\itshape\fontsize{11}{13}\selectfont
+        \ftp@flow@caption}}%
+  \end{picture}}%
+  \kern\dimexpr\ftp@flow@first\relax
+  \ignorespaces
+}{%
+  \par
+  \dimen@=\dimexpr\ftp@flow@height-(\pagetotal-\ftp@flow@start)\relax
+  \ifdim\dimen@>0pt \vspace{\dimen@}\fi
+  \endgroup
+}
+
 \endinput

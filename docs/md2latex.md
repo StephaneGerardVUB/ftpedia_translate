@@ -87,6 +87,25 @@ au point d'appel sous forme de `\footnote{…}`.
 - Les petites images conservent leur taille relative (icônes non agrandies).
 - La hauteur est plafonnée (`0.9\textheight`, proportions conservées).
 
+## Texte au contour d'une illustration (prototype)
+
+La directive `<!-- ftpedia-flow: … -->` produite par `split_ftpedia.py` est
+convertie en un bloc `ftpediaflow` (hors `multicols`, précédé d'un `\newpage`) :
+
+```latex
+\begin{ftpediaflow}{image}{largeur}{hauteur}{premier retrait}{profil}{légende}
+paragraphe…
+\end{ftpediaflow}
+```
+
+- le profil est une liste de retraits en points, transformée en `\parshape` ;
+- la géométrie de la directive est **protégée de la traduction** (seule la
+  légende est traduite) ;
+- le texte reste un paragraphe normal : il peut se couper entre pages.
+
+Voir `docs/split_ftpedia.md` pour le format de la directive et
+`docs/ftpedia-cls.md` pour l'environnement.
+
 ## Tableaux
 
 - Les lignes `| … |` sont converties en `tabularx` pleine largeur.

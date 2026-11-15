@@ -266,10 +266,11 @@ def split_pdfs(doc: fitz.Document, articles: list[dict], out_dir: str) -> None:
 # ---------------------------------------------------------------------------
 def find_figures(page: fitz.Page) -> list[dict]:
     """Group the image placements of a page into logical, contiguous figures."""
-    rects: list[fitz.Rect] = []
+    placements: list[tuple[int, fitz.Rect]] = []
     for img in page.get_images(full=True):
         for rect in page.get_image_rects(img[0]):
-            rects.append(fitz.Rect(rect))
+            placements.append((img[0], fitz.Rect(rect)))
+    rects = [rect for _xref, rect in placements]
     n = len(rects)
     if n == 0:
         return []
@@ -303,17 +304,117 @@ def find_figures(page: fitz.Page) -> list[dict]:
         grouped.setdefault(find(i), []).append(rect)
 
     figures = []
-    for parts in grouped.values():
-        union_rect = parts[0]
-        for part in parts[1:]:
+    for members in grouped.values():
+        union_rect = members[0]
+        for part in members[1:]:
             union_rect = union_rect | part
-        figures.append({"rect": union_rect, "parts": parts})
+        xrefs = [(xref, rect) for xref, rect in placements if rect in members]
+        figures.append({"rect": union_rect, "parts": members, "xrefs": xrefs})
     return figures
+
+
+def render_flow_figure(doc: fitz.Document, figure: dict, dpi: int,
+                       text_rects: list[tuple[float, float, float, float]] | None = None):
+    """Render a figure from its image XObjects, without the text drawn on top.
+
+    The source PDF sometimes stores the whole wrapped area as a raster image,
+    German text included: the text lines are painted white so that only the
+    model remains.
+    """
+    from PIL import Image, ImageDraw
+    import io
+
+    rect = figure["rect"]
+    zoom = dpi / 72.0
+    width = max(1, int(round(rect.width * zoom)))
+    height = max(1, int(round(rect.height * zoom)))
+    canvas = Image.new("RGB", (width, height), "white")
+    for xref, part in figure.get("xrefs", []):
+        info = doc.extract_image(xref)
+        if not info:
+            continue
+        tile = Image.open(io.BytesIO(info["image"])).convert("RGB")
+        left = int(round((part.x0 - rect.x0) * zoom))
+        top = int(round((part.y0 - rect.y0) * zoom))
+        tile_width = max(1, int(round(part.width * zoom)))
+        tile_height = max(1, int(round(part.height * zoom)))
+        tile = tile.resize((tile_width, tile_height), Image.LANCZOS)
+        canvas.paste(tile, (left, top))
+
+    if text_rects:
+        draw = ImageDraw.Draw(canvas)
+        for x0, y0, x1, y1 in text_rects:
+            left = max(0, int(round((x0 - rect.x0) * zoom)) + 1)
+            top = max(0, int(round((y0 - rect.y0) * zoom)) - 1)
+            right = min(width, int(round((min(x1, rect.x1) - rect.x0) * zoom)) + 2)
+            bottom = min(height, int(round((y1 - rect.y0) * zoom)) + 1)
+            if right > left and bottom > top:
+                draw.rectangle([left, top, right, bottom], fill="white")
+    return canvas
 
 
 def render_figure(page: fitz.Page, rect: fitz.Rect, dpi: int) -> fitz.Pixmap:
     zoom = dpi / 72.0
     return page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=rect, alpha=False)
+
+
+def flow_profile(boxes: list[tuple[float, float]], rect: fitz.Rect,
+                 baselineskip: float = 15.0, margin: float = 2.0) -> list[float]:
+    """Return the per-line indent (pt) that keeps text clear of a figure.
+
+    ``boxes`` holds ``(y, x)`` for the source text lines: they describe the
+    silhouette the text follows. The indent of each line of the new layout is
+    interpolated from them, relative to the figure's left edge.
+    """
+    if not boxes:
+        return [0.0]
+    # Several fragments may share a baseline: keep the leftmost one.
+    grouped: dict[float, float] = {}
+    for y, x in boxes:
+        key = round(y, 1)
+        grouped[key] = min(grouped.get(key, x), x)
+    boxes = sorted(grouped.items())
+    lines = max(1, int(rect.height / baselineskip) + 1)
+    indents: list[float] = []
+    for index in range(lines):
+        y = rect.y0 + index * baselineskip + baselineskip / 2
+        if y <= boxes[0][0]:
+            x = boxes[0][1]
+        elif y >= boxes[-1][0]:
+            x = boxes[-1][1]
+        else:
+            x = boxes[-1][1]
+            for (y0, x0), (y1, x1) in zip(boxes, boxes[1:]):
+                if y0 <= y <= y1:
+                    ratio = (y - y0) / (y1 - y0) if y1 > y0 else 0.0
+                    x = x0 + ratio * (x1 - x0)
+                    break
+        indents.append(round(max(0.0, x - rect.x0 + margin), 1))
+    # Two lines stay beside the caption, which sits under the figure.
+    if indents:
+        indents.append(indents[-1])
+        indents.append(indents[-1])
+    indents.append(0.0)  # below the figure the text is full width again
+    return indents
+
+
+def is_flow_figure(figure: dict, blocks: list[dict], left: float) -> bool:
+    """True if the figure starts at the left margin and text runs over it."""
+    rect = figure["rect"]
+    if rect.x0 > left + 12:
+        return False
+    for block in blocks:
+        if block["type"] != 0:
+            continue
+        other = fitz.Rect(block["bbox"])
+        overlap_w = min(other.x1, rect.x1) - max(other.x0, rect.x0)
+        overlap_h = min(other.y1, rect.y1) - max(other.y0, rect.y0)
+        if overlap_w <= 0 or overlap_h <= 0:
+            continue
+        if overlap_w * overlap_h > 0.10 * other.get_area():
+            return True
+    return False
+
 
 
 # ---------------------------------------------------------------------------
@@ -811,6 +912,25 @@ def has_footnote_marker(page: fitz.Page, footnote_top: float) -> bool:
     return False
 
 
+def flow_figure_for(block: dict, flow_figures: list[dict]) -> int | None:
+    """Return the id of the flow figure a text block belongs to, if any."""
+    rect = fitz.Rect(block["bbox"])
+    size = max((s["size"] for line in block["lines"]
+                for s in line["spans"] if s["text"].strip()), default=0)
+    if size > 13:  # a heading is not part of the wrapped paragraph
+        return None
+    for figure in flow_figures:
+        other = figure["rect"]
+        overlap_w = min(rect.x1, other.x1) - max(rect.x0, other.x0)
+        overlap_h = min(rect.y1, other.y1) - max(rect.y0, other.y0)
+        if overlap_w > 0 and overlap_h > 0:
+            return id(figure)
+        if (other.x0 <= rect.x0 <= other.x1 + 12
+                and other.y0 - 2 <= rect.y0 and rect.y1 <= other.y1 + 2):
+            return id(figure)
+    return None
+
+
 def page_items(page: fitz.Page) -> list[dict]:
     """Return text, code, lists, footnotes, figures and tables of a page."""
     figures = find_figures(page)
@@ -846,6 +966,15 @@ def page_items(page: fitz.Page) -> list[dict]:
                 if b["type"] == 0 and is_math_block(b)}
     math_items = (extract_math(page, drawings, [page_blocks[i] for i in math_ids])
                   if math_ids else [])
+
+    # Figures whose left edge is on the margin and over which text is set: the
+    # text follows the model's silhouette and must be laid out as one block.
+    text_left = min((b["bbox"][0] for b in page_blocks if b["type"] == 0),
+                    default=0.0)
+    flow_figures = [fig for fig in figures
+                    if is_flow_figure(fig, page_blocks, text_left)]
+    flow_ids = {id(fig) for fig in flow_figures}
+    flow_records: dict[int, list[dict]] = {id(fig): [] for fig in flow_figures}
 
     last_ordered_no = 0  # to accept numbered lists only as 1, 2, 3, ...
 
@@ -976,6 +1105,11 @@ def page_items(page: fitz.Page) -> list[dict]:
             })
             continue
 
+        flow_id = flow_figure_for(block, flow_figures)
+        if flow_id is not None and records:
+            flow_records[flow_id].extend(records)
+            continue
+
         for run in _segment_runs(records):
             group = run["records"]
             rect = group[0]["bbox"]
@@ -1016,8 +1150,35 @@ def page_items(page: fitz.Page) -> list[dict]:
             })
 
     for figure in figures:
+        if id(figure) in flow_ids:
+            continue
         items.append({"kind": "figure", "rect": figure["rect"],
                       "parts": figure["parts"]})
+
+    for figure in flow_figures:
+        records = flow_records[id(figure)]
+        if not records:
+            continue
+        records.sort(key=lambda r: (round(r["bbox"].y0, 1), r["bbox"].x0))
+        text = merge_emphasis(join_lines([r["text"] for r in records]))
+        if not text:
+            continue
+        items.append({
+            "kind": "flow", "rect": figure["rect"], "text": text,
+            "figure_rect": figure["rect"], "figure_parts": figure["parts"],
+            "xrefs": figure["xrefs"],
+            "size": max(r["size"] for r in records),
+            "bold": any(r["bold"] for r in records),
+            "italic": any(r["italic"] for r in records),
+            "font": Counter(r["font"] for r in records if r["font"])
+                    .most_common(1)[0][0] if any(r["font"] for r in records) else "",
+            "lines": [{"text": r["text"], "size": r["size"],
+                       "bold": r["bold"], "italic": r["italic"]}
+                      for r in records],
+            "line_boxes": [(r["bbox"].y0, r["bbox"].x0) for r in records],
+            "line_rects": [(r["bbox"].x0, r["bbox"].y0,
+                            r["bbox"].x1, r["bbox"].y1) for r in records],
+        })
 
     items.extend(tables)
     items.extend(math_items)
@@ -1066,7 +1227,7 @@ def is_caption(item: dict) -> bool:
 
 def attach_captions(items: list[dict]) -> None:
     """Attach a caption sitting under a figure/table to that host."""
-    hosts = [it for it in items if it["kind"] in ("figure", "table")]
+    hosts = [it for it in items if it["kind"] in ("figure", "table", "flow")]
     for item in items:
         if item["kind"] != "text" or not is_caption(item):
             continue
@@ -1472,6 +1633,30 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
                 prev_text_rect = None
                 continue
 
+            if item["kind"] == "flow":
+                figure_no += 1
+                filename = f"fig_{figure_no:02d}.png"
+                rect = item["figure_rect"]
+                canvas = render_flow_figure(page.parent, item, dpi,
+                                            item.get("line_rects"))
+                canvas.save(os.path.join(image_dir, filename), dpi=(dpi, dpi))
+                profile = ",".join(
+                    f"{value:.1f}pt"
+                    for value in flow_profile(item["line_boxes"], rect))
+                caption = " ".join(
+                    c["text"] for c in sorted(item.get("captions", []),
+                                              key=lambda c: c["rect"].y0))
+                lines.append(
+                    f'<!-- ftpedia-flow: image=images/{filename} '
+                    f'width={rect.width:.1f}pt height={rect.height:.1f}pt '
+                    f'indent={profile} caption="{caption}" -->')
+                lines.append(item["text"])
+                lines.append("")
+                paragraph_index = None
+                illustration_since = False
+                prev_text_rect = None
+                continue
+
             if item["kind"] == "figure":
                 figure_no += 1
                 filename = f"fig_{figure_no:02d}.png"
@@ -1546,6 +1731,8 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
 # Translation engines
 # ---------------------------------------------------------------------------
 IMAGE_REF_RE = re.compile(r"^!\[[^\]]*\]\([^)]*\)\s*$")
+FLOW_LINE_RE = re.compile(
+    r'^(<!--\s*ftpedia-flow:.*?caption=")([^"]*)(".*-->)$')
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 BLOCKQUOTE_RE = re.compile(r"^>\s?(.*)$")
 META_RE = re.compile(r"^\*\*(Kategorie|Autor):\*\*\s*(.*)$")
@@ -2043,6 +2230,13 @@ def translate_markdown(md_path: str, config: dict, force: bool = False) -> str:
         if in_code:
             continue
         if not stripped or IMAGE_REF_RE.match(stripped):
+            continue
+        if stripped.startswith("<!--"):  # HTML directives: keep verbatim
+            flow = FLOW_LINE_RE.match(stripped)
+            if flow:
+                units.append((index, [("lit", flow.group(1)),
+                                      ("tr", flow.group(2)),
+                                      ("lit", flow.group(3))]))
             continue
         if stripped.startswith("$$"):  # display maths: keep verbatim
             continue

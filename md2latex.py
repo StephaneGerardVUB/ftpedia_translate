@@ -37,6 +37,9 @@ ORDERED_RE = re.compile(r"^\d{1,2}[.)]\s+(.*)$")
 TABLE_SEP_RE = re.compile(r"^:?-{3,}:?$")
 LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()]|\([^)]*\))*)\)")
 
+FLOW_RE = re.compile(r"^<!--\s*ftpedia-flow:\s*(.*?)\s*-->\s*$")
+FLOW_ATTR_RE = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
+
 INLINE_RE = re.compile(
     r"(?P<code>`[^`]+`)"
     r"|(?P<math>\$[^$\n]+\$)"
@@ -335,6 +338,37 @@ class Converter:
                 maths = latex_math(stripped[2:-2].strip())
                 cols_on()
                 body.append(r"\[ " + maths + r" \]")
+                i += 1
+                continue
+
+            # Text flowing around an illustration (prototype)
+            flow = FLOW_RE.match(stripped)
+            if flow:
+                attrs = {m.group(1): (m.group(2) if m.group(2) is not None
+                                      else m.group(3))
+                         for m in FLOW_ATTR_RE.finditer(flow.group(1))}
+                i += 1
+                while i < len(lines) and not lines[i].strip():
+                    i += 1
+                text = lines[i].strip() if i < len(lines) else ""
+                indents = [value.strip()
+                           for value in attrs.get("indent", "").split(",")
+                           if value.strip()]
+                shape = [r"\parshape", str(len(indents))]
+                for indent in indents:
+                    shape.append(indent)
+                    shape.append(r"\dimexpr\linewidth-" + indent + r"\relax")
+                first = indents[0] if indents else "0pt"
+                cols_off()
+                body.append(
+                    r"\newpage" + "\n"
+                    + r"\begin{ftpediaflow}{" + attrs["image"] + "}{"
+                    + attrs["width"] + "}{" + attrs["height"] + "}{"
+                    + first + "}{" + " ".join(shape) + "}{"
+                    + self.inline(attrs.get("caption", "")) + "}\n"
+                    + self.inline(text) + "\n"
+                    + r"\end{ftpediaflow}")
+                cols_on()
                 i += 1
                 continue
 

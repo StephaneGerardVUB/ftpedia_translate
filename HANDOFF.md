@@ -125,9 +125,18 @@ python3 md2latex.py --magazine ftpedia-2025-2 --limit 3 --no-fr
   → 6 PDF compilés.
 - `2024-3` et `2024-4` extraits + traduits intégralement (9 et 12 articles,
   DeepL), puis convertis en PDF LaTeX (DE + FR).
+- **Prototype B1** (texte au contour d'une illustration) implémenté :
+  détection dans `split_ftpedia.py`, directive `ftpedia-flow`, environnement
+  `ftpediaflow` dans la classe. Validé sur `2024-3/02` (page 6), en allemand
+  et en français (assemblage manuel de la traduction existante). Les `.fr.md`
+  existants **n'ont pas été régénérés** : le quota DeepL est épuisé.
 
 ## Limites connues
 
+- Texte au contour : seules les illustrations alignées à gauche sont traitées ;
+  les titres de section sont fusionnés en gras dans le paragraphe ; le texte
+  peut être très étroit en bas du modèle. Les `.fr.md` devront être régénérés
+  (extraction + `--translate-only`) quand le quota DeepL sera revenu.
 - Tableaux « composites » (captures dans les cellules) : les images restent des
   figures séparées (la conversion en image unique a été annulée volontairement).
 - Un grand tableau découpé en plusieurs tableaux Markdown (sauts de page)

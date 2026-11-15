@@ -122,6 +122,34 @@ Les marques de gras/italique coupées par ces ruptures sont fusionnées
   figure découpée en bandes est exportée d'un seul tenant.
 - Rendu de la zone recollée à `--dpi`.
 
+### Texte au contour d'une illustration (prototype)
+
+Certaines pages composent le texte autour du **contour** d'un modèle (le texte
+est dessiné par-dessus le fond blanc de l'image, avec un retrait qui suit la
+silhouette). L'extracteur détecte ces pages et émet un bloc particulier.
+
+- **Détection** : figure dont le bord gauche est sur la marge et qui recouvre
+  au moins 10 % d'un bloc de texte. Seules les figures à gauche sont traitées
+  pour l'instant.
+- **Texte** : tous les blocs de texte de la zone sont fusionnés en un seul
+  paragraphe (les titres sont laissés dans le flux, en gras).
+- **Profil** : pour chaque ligne, on interpole la position `x` des lignes
+  source (regroupées par `y`, la plus à gauche l'emporte) ; le résultat est une
+  liste de retraits en points, plus deux lignes pour la bande de légende, puis
+  `0` pour revenir à pleine largeur.
+- **Image** : le PDF stocke parfois toute la zone (texte compris) comme un
+  raster. La figure est donc reconstruite depuis les XObjects, puis les
+  rectangles des lignes de texte sont **blanchis** pour ne garder que le
+  modèle.
+- **Sortie** : une directive remplace l'image et sa légende :
+
+  ```
+  <!-- ftpedia-flow: image=images/fig_03.png width=365.8pt height=638.9pt
+       indent=270.6pt,279.7pt,… caption="Abb. 3: …" -->
+  ```
+
+  suivie du paragraphe à composer.
+
 ### Tableaux
 
 - Détectés sur les pages comportant de nombreuses lignes vectorielles.

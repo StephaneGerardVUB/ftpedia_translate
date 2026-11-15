@@ -76,6 +76,26 @@ xelatex example.tex && xelatex example.tex
 | `\artikelkopf` | Compose rubrique + titre + auteur. |
 | `ftabstract` (environnement) | Chapô italique pleine largeur. |
 | `\ftpediahref{url}{texte}` | Lien hypertexte bleu souligné. |
+| `ftpediaflow` (environnement) | Texte composé autour du contour d'une illustration. |
+
+## Texte au contour : `ftpediaflow`
+
+```latex
+\begin{ftpediaflow}{image}{largeur}{hauteur}{premier retrait}{profil}{légende}
+paragraphe…
+\end{ftpediaflow}
+```
+
+- l'image et la légende sont placées **derrière** le texte, au point courant
+  (hauteur nulle pour la mise en page) ;
+- `profil` est une suite de retraits (`\parshape`) fournie par
+  `md2latex.py` ; les deux dernières entrées réservent la bande de la légende ;
+- la légende est positionnée sous l'image ;
+- si le texte est plus court que l'image, un espace vertical complète jusqu'au
+  bas de l'image ; s'il est plus long, il continue normalement (et peut se
+  couper entre pages).
+
+Prototype : seules les illustrations alignées à gauche sont traitées.
 
 ## Polices
 
