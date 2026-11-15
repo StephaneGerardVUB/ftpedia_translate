@@ -69,7 +69,7 @@ MATH_SYMBOLS = {
     "≈": r"\approx ", "≠": r"\neq ", "≤": r"\leq ", "≥": r"\geq ",
     "≡": r"\equiv ", "∼": r"\sim ", "∝": r"\propto ",
     "∞": r"\infty ", "∑": r"\sum ", "∏": r"\prod ", "∫": r"\int ",
-    "∂": r"\partial ", "∇": r"\nabla ", "√": r"\surd ",
+    "∂": r"\partial ", "∇": r"\nabla ", "√": r"\surd ", "න": r"\int ",
     "→": r"\to ", "←": r"\leftarrow ", "↔": r"\leftrightarrow ",
     "⇒": r"\Rightarrow ", "⇐": r"\Leftarrow ", "⇔": r"\Leftrightarrow ",
     "∈": r"\in ", "∉": r"\notin ", "⊂": r"\subset ", "⊃": r"\supset ",    "⊆": r"\subseteq ", "⊇": r"\supseteq ", "∪": r"\cup ", "∩": r"\cap ",
@@ -141,6 +141,21 @@ TEXT_ESCAPES = {
     "^": r"\textasciicircum{}",
 }
 
+# Maths symbols that the text font lacks: set them in maths mode.
+TEXT_MATH = {
+    "∈": r"$\in$", "∉": r"$\notin$", "≤": r"$\leq$", "≥": r"$\geq$",
+    "≠": r"$\neq$", "≈": r"$\approx$", "∞": r"$\infty$", "∑": r"$\sum$",
+    "√": r"$\surd$", "∂": r"$\partial$", "→": r"$\to$", "⇒": r"$\Rightarrow$",
+    "∀": r"$\forall$", "∃": r"$\exists$", "∪": r"$\cup$", "∩": r"$\cap$",
+}
+
+
+def escape_prose(value: str) -> str:
+    """Escape prose, setting symbols missing from the text font in maths mode."""
+    value = normalize_math_glyphs(value)
+    return "".join(TEXT_MATH.get(ch) or TEXT_ESCAPES.get(ch, ch)
+                   for ch in value)
+
 
 def escape_text(value: str) -> str:
     value = normalize_math_glyphs(value)
@@ -163,7 +178,7 @@ class Converter:
         parts: list[str] = []
         last = 0
         for match in INLINE_RE.finditer(text):
-            parts.append(escape_text(text[last:match.start()]))
+            parts.append(escape_prose(text[last:match.start()]))
             kind = match.lastgroup
             raw = match.group(0)
             if kind == "code":
@@ -186,7 +201,7 @@ class Converter:
                 definition = self.footnotes.get(key, "")
                 parts.append(r"\footnote{" + self.inline(definition) + "}")
             last = match.end()
-        parts.append(escape_text(text[last:]))
+        parts.append(escape_prose(text[last:]))
         return "".join(parts)
 
     # -- tables -----------------------------------------------------------

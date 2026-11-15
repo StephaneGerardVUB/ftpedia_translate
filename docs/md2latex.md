@@ -131,6 +131,8 @@ Voir `docs/split_ftpedia.md` pour le format de la directive et
   ramenées à des lettres ASCII, et les artefacts d'extraction (flèches de
   vecteur étirées, grands délimiteurs) sont neutralisés : sans cela, ils
   apparaissent comme des caractères manquants dans le PDF.
+- Dans la **prose**, les symboles absents de la police de texte (`∈`, `≤`, `≈`,
+  `→`…) sont composés en mode mathématique (`$\in$`, …).
 - La police mathématique reste celle de TeX (Computer Modern) pour l'instant.
 
 ## Langue
