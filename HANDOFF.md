@@ -46,7 +46,8 @@ output/<magazine>/
 
 - Découpage via les signets de niveau 1 (`--min-page 4` par défaut).
 - Ordre de lecture 2 colonnes ; recollage des paragraphes coupés par saut de
-  page, changement de colonne ou illustration.
+  page, changement de colonne, illustration ou écart vertical < 2 pt (texte
+  qui suit le contour d'une image) ; fusion des gras/italiques coupés.
 - Images : recollage des tuiles contiguës, rendu à `--dpi` (300 par défaut).
 - Tableaux texte → tableaux Markdown.
 - Listes à puces et numérotées (`-`, `1.`).

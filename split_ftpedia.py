@@ -127,20 +127,94 @@ def approx(a: float, b: float, tol: float = TILE_TOL) -> bool:
     return abs(a - b) <= tol
 
 
+CONJUNCTIONS = {"und", "oder", "sowie", "bzw", "bzw.", "beziehungsweise"}
+UNITS = {"mm", "cm", "m", "km", "kg", "g", "mg", "v", "a", "w", "kw",
+         "hz", "khz", "mhz", "ω", "kω", "µf", "nf", "pf", "l", "ml",
+         "s", "ms", "µs", "%", "°", "°c"}
+URL_RE = re.compile(r"(?:www\.|/|\.(?:de|com|org|net|fr|ch|at|eu|io)(?:\b|$|/))",
+                    re.IGNORECASE)
+
+
+def hyphen_parts(prev: str, nxt: str) -> tuple[bool, bool]:
+    """Decide how to join at a hyphen: (keep the hyphen, add a space)."""
+    head = nxt.split(None, 1)[0] if nxt.split() else ""
+    tail = prev.rsplit(None, 1)[-1] if prev.split() else prev
+    segment = tail[:-1].rsplit("-", 1)[-1]
+    keep = (head[:1].isupper()
+            or any(ch.isdigit() for ch in segment)
+            or segment.lower() in UNITS
+            or URL_RE.search(tail) is not None
+            or URL_RE.search(head) is not None)
+    space = head.strip(",.;:!?\"'“”„").lower() in CONJUNCTIONS
+    return keep, space
+
+
+def hyphen_join(prev: str, nxt: str) -> str:
+    """Join two fragments where ``prev`` ends with a hyphen.
+
+    A hyphen at a line break is either a soft hyphen (syllable break, to be
+    dropped) or a real hyphen (compound, unit, path or URL, to be kept). A
+    spaced dash (``100 -`` / ``400``) keeps its spaces.
+    """
+    tail = prev.rsplit(None, 1)[-1] if prev.split() else prev
+    if tail == "-":
+        return prev + " " + nxt
+    keep, space = hyphen_parts(prev, nxt)
+    if keep:
+        return prev + nxt
+    if space:
+        return prev + " " + nxt
+    return prev[:-1] + nxt
+
+
+def join_fragments(prev: str, nxt: str) -> str:
+    """Join two text fragments, handling the hyphen at the break."""
+    prev, nxt = prev.rstrip(), nxt.lstrip()
+    if not prev:
+        return nxt
+    if not nxt:
+        return prev
+    if prev.endswith("-"):
+        return hyphen_join(prev, nxt)
+    return prev + " " + nxt
+
+
 def join_lines(lines: list[str]) -> str:
     """Join the lines of a text block, removing soft hyphens at line breaks."""
     out = ""
     for i, line in enumerate(lines):
         line = line.rstrip()
-        if i == 0:
-            out = line
-            continue
-        prev = out.rstrip()
-        if prev.endswith("-") and not line[:1].isdigit() and not line[:1].isupper():
-            out = prev[:-1] + line
-        else:
-            out = prev + " " + line
+        out = line if i == 0 else join_fragments(out, line)
     return re.sub(r"\s+", " ", out).strip()
+
+
+# Emphasis runs split over several lines: ``**a** **b**`` -> ``**a b**``.
+ADJACENT_EMPH_RE = re.compile(r"(\*{1,3})([^*]+?)\1[ \t]+\1(?=[^*])")
+
+
+def merge_emphasis(text: str) -> str:
+    """Merge emphasis markers that a line break left on both sides.
+
+    A bold (or italic) sentence wrapped over several PDF lines becomes one
+    run; a trailing hyphen inside the run is handled like a line-break hyphen.
+    """
+    def repl(match: re.Match) -> str:
+        marker, body = match.group(1), match.group(2)
+        if body.endswith("-"):
+            rest = match.string[match.end():]
+            keep, space = hyphen_parts(body, rest)
+            if keep:
+                return f"{marker}{body}"
+            if space:
+                return f"{marker}{body} "
+            return f"{marker}{body[:-1]}"
+        return f"{marker}{body} "
+
+    previous = None
+    while previous != text:
+        previous = text
+        text = ADJACENT_EMPH_RE.sub(repl, text)
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -1265,9 +1339,17 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
     para_col = None
     illustration_since = False  # an image/table interrupted the open paragraph
 
-    def append_paragraph(text: str, pno: int, col: int) -> None:
+    def append_paragraph(text: str, pno: int, col: int,
+                         gap: float | None = None) -> None:
         """Append a paragraph, joining it to the previous one when it clearly
-        continues it across a page break, a column break or an illustration."""
+        continues it across a page break, a column break or an illustration.
+
+        ``gap`` is the vertical distance (in points) between the previous text
+        block and this one on the same page and in the same column. Text
+        wrapped around an illustration is split into several blocks by the PDF
+        extractor; those blocks touch each other, so a very small gap marks a
+        continuation even when the next word is capitalised.
+        """
         nonlocal paragraph_index, para_page, para_col, illustration_since
         if paragraph_index is not None:
             previous = lines[paragraph_index]
@@ -1275,15 +1357,22 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
             terminal = ".!?:;…\"»)]”’"
             continuation = ((pno != para_page) or (col != para_col)
                             or illustration_since)
+            tight = gap is not None and gap < 2.0
             if (core and core[-1] not in terminal
-                    and (text[:1].islower() or continuation)):
+                    and (text[:1].islower() or continuation or tight)):
                 if previous.endswith("-"):
-                    lines[paragraph_index] = previous + text
+                    if (text[:1].isdigit() or text[:1].isupper()
+                            or "/" in previous or "/" in text):
+                        joined = previous + text
+                    else:
+                        joined = previous[:-1] + text
+                    lines[paragraph_index] = merge_emphasis(joined)
                 else:
-                    lines[paragraph_index] = previous + " " + text
+                    lines[paragraph_index] = merge_emphasis(
+                        previous + " " + text)
                 para_page, para_col, illustration_since = pno, col, False
                 return
-        lines.append(text)
+        lines.append(merge_emphasis(text))
         lines.append("")
         paragraph_index = len(lines) - 2
         para_page, para_col, illustration_since = pno, col, False
@@ -1315,12 +1404,23 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
             return f"[^{fn_ids[key]}]"
         return re.sub(r"\[\[FN:(\d+)\]\]", repl, text)
 
+    # Last text block seen, used to detect blocks that the PDF extractor split
+    # only because the text wraps around an illustration.
+    prev_text_rect = None
+    prev_text_page = None
+    prev_text_col = None
+
     for _pno, page, items in pages:
         for item in items:
             mid = page.rect.width / 2
             col = 0 if (item["rect"].x0 + item["rect"].x1) / 2 < mid else 1
+            gap = None
+            if (prev_text_rect is not None and prev_text_page == _pno
+                    and prev_text_col == col):
+                gap = item["rect"].y0 - prev_text_rect.y1
             if item["kind"] == "code":
                 code_buffer.append(item["text"])
+                prev_text_rect = None
                 continue
             flush_code()
 
@@ -1332,6 +1432,7 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
                 fn_defs.append((fn_ids[key], item["text"]))
                 paragraph_index = None
                 illustration_since = False
+                prev_text_rect = None
                 continue
 
             if item["kind"] == "math":
@@ -1347,6 +1448,7 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
                 lines.append("")
                 paragraph_index = None
                 illustration_since = False
+                prev_text_rect = None
                 continue
 
             if item["kind"] == "list":
@@ -1354,6 +1456,7 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
                 lines.append("")
                 paragraph_index = None
                 illustration_since = False
+                prev_text_rect = None
                 continue
 
             if item["kind"] == "table":
@@ -1366,6 +1469,7 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
                 # A table can interrupt a paragraph: keep it open so the rest
                 # of the sentence, if any, is still joined.
                 illustration_since = True
+                prev_text_rect = None
                 continue
 
             if item["kind"] == "figure":
@@ -1381,6 +1485,7 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
                     lines.append("")
                 # An illustration can interrupt a paragraph: keep it open.
                 illustration_since = True
+                prev_text_rect = None
                 continue
 
             text = resolve_refs(item["text"], _pno)
@@ -1408,13 +1513,18 @@ def process_article(doc: fitz.Document, article: dict, out_root: str, dpi: int) 
                 lines.append("")
                 paragraph_index = None
                 illustration_since = False
+                prev_text_rect = None
             elif is_subheading:
                 lines.append("### " + re.sub(r"\*+", "", text))
                 lines.append("")
                 paragraph_index = None
                 illustration_since = False
+                prev_text_rect = None
             else:
-                append_paragraph(text, _pno, col)
+                append_paragraph(text, _pno, col, gap)
+                prev_text_rect = item["rect"]
+                prev_text_page = _pno
+                prev_text_col = col
 
     flush_code()
 

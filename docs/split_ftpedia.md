@@ -91,9 +91,30 @@ Un paragraphe est recollé avec le suivant lorsque :
 
 - il ne se termine pas par une ponctuation de fin de phrase, **et**
 - la suite commence par une minuscule, **ou** on change de page, **ou** on
-  change de colonne, **ou** une illustration (figure/tableau) s'est intercalée.
+  change de colonne, **ou** une illustration (figure/tableau) s'est intercalée,
+  **ou** l'écart vertical entre les deux blocs est inférieur à 2 pt.
 
-Cela évite qu'une phrase soit traduite en deux morceaux.
+Le dernier critère traite le **texte qui suit le contour d'une illustration** :
+l'extracteur découpe alors un même paragraphe en plusieurs blocs collés les uns
+aux autres, souvent avec une majuscule (nom allemand) au début du bloc suivant.
+
+Les marques de gras/italique coupées par ces ruptures sont fusionnées
+(`**a** **b**` → `**a b**`).
+
+### Césures et traits d'union
+
+À un saut de ligne, un `-` final est traité comme :
+
+- **césure** (trait supprimé) quand la suite est en minuscule : `funk-` +
+  `tioniert` → `funktioniert` ;
+- **trait d'union réel** (conservé) quand la suite est en majuscule
+  (`Silberling-` + `Gehäuses`), quand le dernier segment contient un chiffre
+  (`3D-`, `6-`, `2000-`), quand il s'agit d'une unité (`mm-`), d'un chemin ou
+  d'une URL (`machine-` + `learnung-user/…`) ;
+- **trait suspendu** (conservé avec une espace) devant une conjonction :
+  `Rot-` + `und` → `Rot- und` ;
+- **tiret espacé** (conservé avec espaces) quand le `-` est un jeton isolé :
+  `100 -` + `400` → `100 - 400`.
 
 ### Figures
 
