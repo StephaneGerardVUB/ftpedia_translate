@@ -105,6 +105,10 @@ au point d'appel sous forme de `\footnote{…}`.
 - Les symboles Unicode (lettres grecques, `∆`, `×`, `≈`, `→`, `°`…) sont
   convertis en commandes LaTeX : les polices mathématiques Computer Modern
   n'ont pas ces glyphes et le caractère disparaîtrait silencieusement.
+- Les lettres italiques mathématiques (`U+1D400…U+1D7FF`, p. ex. `𝑛`, `𝑝`) sont
+  ramenées à des lettres ASCII, et les artefacts d'extraction (flèches de
+  vecteur étirées, grands délimiteurs) sont neutralisés : sans cela, ils
+  apparaissent comme des caractères manquants dans le PDF.
 - La police mathématique reste celle de TeX (Computer Modern) pour l'instant.
 
 ## Langue

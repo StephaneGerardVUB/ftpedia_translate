@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 
 from PIL import Image
 
@@ -67,13 +68,37 @@ MATH_SYMBOLS = {
     "∂": r"\partial ", "∇": r"\nabla ", "√": r"\surd ",
     "→": r"\to ", "←": r"\leftarrow ", "↔": r"\leftrightarrow ",
     "⇒": r"\Rightarrow ", "⇐": r"\Leftarrow ", "⇔": r"\Leftrightarrow ",
-    "∈": r"\in ", "∉": r"\notin ", "⊂": r"\subset ", "⊃": r"\supset ",
-    "⊆": r"\subseteq ", "⊇": r"\supseteq ", "∪": r"\cup ", "∩": r"\cap ",
+    "∈": r"\in ", "∉": r"\notin ", "⊂": r"\subset ", "⊃": r"\supset ",    "⊆": r"\subseteq ", "⊇": r"\supseteq ", "∪": r"\cup ", "∩": r"\cap ",
     "∀": r"\forall ", "∃": r"\exists ", "∠": r"\angle ", "⊥": r"\perp ",
+    "⨁": r"\oplus ", "⊕": r"\oplus ", "⨂": r"\otimes ", "⊗": r"\otimes ",
+    "∨": r"\vee ", "∧": r"\wedge ", "¬": r"\neg ",
     "°": r"^{\circ}", "′": "'", "″": "''", "…": r"\ldots ",
 }
 
 MATH_TEXT_GROUP_RE = re.compile(r"\\(?:text|mathrm|operatorname|mbox|textrm)\s*\{")
+
+# Artefacts left by the maths reconstruction: stretchy vector arrows and
+# large delimiters reported as unrelated code points by the PDF extractor.
+MATH_ARTIFACTS = {
+    "\u122c": "", "\u20d7": "",       # stretchy/combining vector arrow
+    "\u0d6d": "(", "\u1246": "(",      # large opening delimiter
+    "\u0d71": ")",                     # large closing delimiter
+    "\u0131": "i",                     # dotless i used as a maths variable
+}
+
+
+def normalize_math_glyphs(text: str) -> str:
+    """Fold mathematical alphanumerics to plain characters.
+
+    The PDF stores maths italics as ``U+1D400..U+1D7FF`` code points; text
+    fonts have no glyph for them. NFKC maps them back to ASCII letters.
+    """
+    out: list[str] = []
+    for char in text:
+        if 0x1D400 <= ord(char) <= 0x1D7FF:
+            char = unicodedata.normalize("NFKC", char)
+        out.append(MATH_ARTIFACTS.get(char, char))
+    return "".join(out)
 
 
 def _brace_end(text: str, start: int) -> int:
@@ -91,6 +116,7 @@ def _brace_end(text: str, start: int) -> int:
 
 def latex_math(text: str) -> str:
     """Convert Unicode maths symbols to LaTeX, leaving textual groups alone."""
+    text = normalize_math_glyphs(text)
     out: list[str] = []
     index = 0
     while index < len(text):
@@ -113,6 +139,7 @@ TEXT_ESCAPES = {
 
 
 def escape_text(value: str) -> str:
+    value = normalize_math_glyphs(value)
     return "".join(TEXT_ESCAPES.get(ch, ch) for ch in value)
 
 

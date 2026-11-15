@@ -114,15 +114,16 @@ python3 md2latex.py --magazine ftpedia-2025-2 --limit 3 --no-fr
 
 ## État actuel
 
-- 8 numéros extraits (PDF par article, `.md`, `.fr.md`, images) :
-  2024-4 (12), 2025-1 (9), 2025-2 (9), 2025-3 (6), 2025-4 (18), 2026-1 (11),
-  2026-2 (10), 2026-3 (6).
+- 9 numéros extraits (PDF par article, `.md`, `.fr.md`, images) :
+  2024-3 (9), 2024-4 (12), 2025-1 (9), 2025-2 (9), 2025-3 (6), 2025-4 (18),
+  2026-1 (11), 2026-2 (10), 2026-3 (6).
 - `md2latex.py` testé sur 3 articles (DE + FR) :
   - `2026-1/01` Sphero BB-8 (images, listes)
   - `2025-2/03` Schräge Drehscheibe (maths, `\tag`, racines)
   - `2025-2/08` Oxocard (code, longs tableaux, 45 images)
   → 6 PDF compilés.
-- `2024-4` extrait + traduit intégralement (12 articles, DeepL).
+- `2024-3` et `2024-4` extraits + traduits intégralement (9 et 12 articles,
+  DeepL), puis convertis en PDF LaTeX (DE + FR).
 
 ## Limites connues
 
