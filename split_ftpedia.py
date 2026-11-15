@@ -648,6 +648,47 @@ BULLETS = "\uf0b7\u2022\u25aa\u25e6\u2023\u00b7\u25cf\u25a0"
 ORDERED_RE = re.compile(r"^(\d{1,2})[.)]\s+\S")
 
 
+def _looks_like_code(line: str) -> bool:
+    """True if a code line starts a statement instead of continuing a comment."""
+    text = line.strip()
+    if not text:
+        return False
+    if text.startswith(("#", "//", "/*", "*", "}", "{")):
+        return True
+    if any(token in text for token in (";", "=", "{", "}")):
+        return True
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_.]*\s*\(", text):
+        return True
+    if re.match(r"^(?:if|for|while|switch|case|else|return|void|int|char"
+                r"|float|double|long|unsigned|const|static|struct|typedef"
+                r"|class|public|private|def|import|from|print|echo|end"
+                r"|begin|function|var|let)\b", text):
+        return True
+    return False
+
+
+def _has_comment(line: str) -> bool:
+    """True if the line contains a ``//`` comment (and not a URL scheme)."""
+    return re.search(r"(?:^|\s)//", line) is not None
+
+
+def rejoin_code_lines(code: str) -> str:
+    """Stitch back comment lines wrapped by the narrow PDF column.
+
+    In the magazine a long ``//`` comment is wrapped onto the next line; the
+    continuation has no statement marker, so it is appended to the comment.
+    """
+    lines: list[str] = []
+    for raw in code.split("\n"):
+        line = raw.rstrip()
+        if (lines and _has_comment(lines[-1]) and line.strip()
+                and not _looks_like_code(line)):
+            lines[-1] = lines[-1].rstrip() + " " + line.strip()
+        else:
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def _segment_runs(records: list[dict]) -> list[dict]:
     """Group records into code runs, list items and prose runs.
 
@@ -868,7 +909,8 @@ def page_items(page: fitz.Page) -> list[dict]:
                 rect = rect | record["bbox"]
 
             if run["kind"] == "code":
-                code = "\n".join(r["raw"].rstrip() for r in group)
+                code = rejoin_code_lines(
+                    "\n".join(r["raw"].rstrip() for r in group))
                 if code.strip():
                     items.append({"kind": "code", "rect": rect, "text": code})
                 continue
@@ -1749,6 +1791,120 @@ def table_row_segments(line: str) -> list[tuple]:
     return segments
 
 
+# TeX function names and units that must never be translated inside maths.
+MATH_KEEP_WORDS = {
+    "sin", "cos", "tan", "cot", "sec", "csc", "sinh", "cosh", "tanh",
+    "arcsin", "arccos", "arctan", "log", "ln", "lg", "exp", "lim",
+    "max", "min", "sup", "inf", "det", "dim", "mod", "gcd", "deg",
+    "abs", "sgn", "ker", "arg", "const", "and", "or", "not", "if",
+    "else", "for", "ohm", "mm", "cm", "km", "kg", "ms", "hz", "khz",
+}
+
+MATH_WORD_RE = re.compile(r"(?<![\\A-Za-z])([A-Za-zÄÖÜäöüß]{3,})(?![A-Za-z])")
+
+# Groups that hold identifiers, units or pre-formatted labels: kept verbatim.
+MATH_PROTECT_RE = re.compile(
+    r"(?:_|\^|\\text(?:bf|it|rm|sf|tt)?|\\mathrm|\\operatorname"
+    r"|\\mathbf|\\mathit|\\mathsf)\s*\{")
+
+
+def _brace_span(text: str, start: int) -> int:
+    """Return the index just after the brace group opening at ``start``."""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return len(text)
+
+
+def _protected_spans(latex: str) -> list[tuple[int, int]]:
+    spans = []
+    for match in MATH_PROTECT_RE.finditer(latex):
+        start = latex.index("{", match.start())
+        spans.append((start, _brace_span(latex, start)))
+    return spans
+
+
+def math_phrases(latex: str) -> list[tuple[int, int, str]]:
+    """Return the plain-language phrases of a maths expression.
+
+    A phrase is a run of words separated by spaces only (``Impulse pro
+    Umdrehung``); subscripts, superscripts and ``\\text``-like groups are
+    skipped because they hold identifiers or already-formatted labels.
+    """
+    protected = _protected_spans(latex)
+
+    def is_protected(position: int) -> bool:
+        return any(start <= position < end for start, end in protected)
+
+    phrases: list[tuple[int, int, str]] = []
+    for match in MATH_WORD_RE.finditer(latex):
+        word = match.group(1)
+        if is_protected(match.start()):
+            continue
+        if word.isupper() or any(char.isdigit() for char in word):
+            continue
+        if word.lower() in MATH_KEEP_WORDS:
+            continue
+        if not re.search(r"[aeiouyäöü]", word.lower()):
+            continue
+        if phrases and latex[phrases[-1][1]:match.start()].strip() == "":
+            start, _end, text = phrases[-1]
+            phrases[-1] = (start, match.end(), latex[start:match.end()])
+        else:
+            phrases.append((match.start(), match.end(), word))
+    return phrases
+
+
+def translate_math_lines(lines: list[str], config: dict) -> None:
+    """Translate the words inside display-maths lines, in place.
+
+    German quantity names (``Drehwinkel``, ``Impulse pro Umdrehung``) are
+    common in formulas; they are translated and wrapped in ``\\text{…}`` so
+    they typeset upright in the target language.
+    """
+    indices = [index for index, line in enumerate(lines)
+               if line.strip().startswith("$$") and line.strip().endswith("$$")
+               and len(line.strip()) > 4]
+    if not indices:
+        return
+
+    texts: list[str] = []
+    for index in indices:
+        for _start, _end, phrase in math_phrases(lines[index]):
+            if phrase not in texts:
+                texts.append(phrase)
+    if not texts:
+        return
+
+    translated = translate_texts(texts, config)
+    mapping = {}
+    for source, target in zip(texts, translated):
+        target = " ".join(target.split()).strip(" .")
+        target = re.sub(r"([%&#_])", r"\\\1", target)
+        if target and target.casefold() != source.casefold():
+            mapping[source] = target
+    if not mapping:
+        return
+
+    for index in indices:
+        line = lines[index]
+        pieces: list[str] = []
+        last = 0
+        for start, end, phrase in math_phrases(line):
+            if phrase not in mapping:
+                continue
+            pieces.append(line[last:start])
+            pieces.append("\\text{" + mapping[phrase] + "}")
+            last = end
+        pieces.append(line[last:])
+        lines[index] = "".join(pieces)
+
+
 def translate_markdown(md_path: str, config: dict, force: bool = False) -> str:
     """Write a translated copy of ``md_path`` next to it.
 
@@ -1857,6 +2013,10 @@ def translate_markdown(md_path: str, config: dict, force: bool = False) -> str:
                 parts.append(f"[{translated[pointer]}]({segment[2]})")
                 pointer += 1
         lines[index] = "".join(parts)
+
+    # Formulas are copied verbatim, but their plain words (often German
+    # quantity names) are translated and set upright.
+    translate_math_lines(lines, config)
 
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))

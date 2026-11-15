@@ -45,6 +45,66 @@ INLINE_RE = re.compile(
     r"|(?P<fn>\[\^[^\]]+\])"
 )
 
+# Unicode maths symbols mapped to LaTeX: the text fonts used for maths
+# (Computer Modern) have no Greek or symbol glyphs in their text encoding.
+MATH_SYMBOLS = {
+    "α": r"\alpha ", "β": r"\beta ", "γ": r"\gamma ", "δ": r"\delta ",
+    "ε": r"\varepsilon ", "ϵ": r"\epsilon ", "ζ": r"\zeta ", "η": r"\eta ",
+    "θ": r"\theta ", "ϑ": r"\vartheta ", "ι": r"\iota ", "κ": r"\kappa ",
+    "λ": r"\lambda ", "μ": r"\mu ", "µ": r"\mu ", "ν": r"\nu ",
+    "ξ": r"\xi ", "π": r"\pi ", "ϖ": r"\varpi ", "ρ": r"\rho ",
+    "ϱ": r"\varrho ", "σ": r"\sigma ", "ς": r"\varsigma ", "τ": r"\tau ",
+    "υ": r"\upsilon ", "φ": r"\varphi ", "ϕ": r"\phi ", "χ": r"\chi ",
+    "ψ": r"\psi ", "ω": r"\omega ",
+    "Γ": r"\Gamma ", "Δ": r"\Delta ", "∆": r"\Delta ", "Θ": r"\Theta ",
+    "Λ": r"\Lambda ", "Ξ": r"\Xi ", "Π": r"\Pi ", "Σ": r"\Sigma ",
+    "Υ": r"\Upsilon ", "Φ": r"\Phi ", "Ψ": r"\Psi ", "Ω": r"\Omega ",
+    "−": "-", "×": r"\times ", "÷": r"\div ", "⋅": r"\cdot ",
+    "∙": r"\cdot ", "·": r"\cdot ", "±": r"\pm ", "∓": r"\mp ",
+    "≈": r"\approx ", "≠": r"\neq ", "≤": r"\leq ", "≥": r"\geq ",
+    "≡": r"\equiv ", "∼": r"\sim ", "∝": r"\propto ",
+    "∞": r"\infty ", "∑": r"\sum ", "∏": r"\prod ", "∫": r"\int ",
+    "∂": r"\partial ", "∇": r"\nabla ", "√": r"\surd ",
+    "→": r"\to ", "←": r"\leftarrow ", "↔": r"\leftrightarrow ",
+    "⇒": r"\Rightarrow ", "⇐": r"\Leftarrow ", "⇔": r"\Leftrightarrow ",
+    "∈": r"\in ", "∉": r"\notin ", "⊂": r"\subset ", "⊃": r"\supset ",
+    "⊆": r"\subseteq ", "⊇": r"\supseteq ", "∪": r"\cup ", "∩": r"\cap ",
+    "∀": r"\forall ", "∃": r"\exists ", "∠": r"\angle ", "⊥": r"\perp ",
+    "°": r"^{\circ}", "′": "'", "″": "''", "…": r"\ldots ",
+}
+
+MATH_TEXT_GROUP_RE = re.compile(r"\\(?:text|mathrm|operatorname|mbox|textrm)\s*\{")
+
+
+def _brace_end(text: str, start: int) -> int:
+    """Return the index just after the brace group opening at ``start``."""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return len(text)
+
+
+def latex_math(text: str) -> str:
+    """Convert Unicode maths symbols to LaTeX, leaving textual groups alone."""
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        group = MATH_TEXT_GROUP_RE.match(text, index)
+        if group:
+            end = _brace_end(text, group.end() - 1)
+            out.append(text[index:end])
+            index = end
+            continue
+        out.append(MATH_SYMBOLS.get(text[index], text[index]))
+        index += 1
+    return "".join(out)
+
+
 TEXT_ESCAPES = {
     "\\": r"\textbackslash{}", "&": r"\&", "%": r"\%", "$": r"\$",
     "#": r"\#", "_": r"\_", "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}",
@@ -242,7 +302,7 @@ class Converter:
 
             # Display maths
             if stripped.startswith("$$") and stripped.endswith("$$") and len(stripped) >= 4:
-                maths = stripped[2:-2].strip()
+                maths = latex_math(stripped[2:-2].strip())
                 cols_on()
                 body.append(r"\[ " + maths + r" \]")
                 i += 1

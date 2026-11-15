@@ -117,6 +117,8 @@ Cela évite qu'une phrase soit traduite en deux morceaux.
 ### Code
 
 - Lignes entièrement en police **Courier** → bloc de code (fenced code block).
+- Les commentaires `//` coupés par la largeur de colonne du PDF sont recollés
+  sur une seule ligne (une continuation n'a pas de marqueur d'instruction).
 - Spans Courier inline dans la prose → code inline (entre accents graves).
 
 ### Liens
@@ -136,6 +138,11 @@ Cela évite qu'une phrase soit traduite en deux morceaux.
 - Fractions reconstruites via les barres horizontales.
 - Racines reconstruites via le **vinculum** (trait au-dessus du radicande).
 - Numéros d'équation conservés en `\tag{n}`.
+- Les **mots en clair** contenus dans une formule (souvent des noms de
+  grandeurs allemands, p. ex. `Drehwinkel`, `Impulse pro Umdrehung`) sont
+  traduits et placés dans `\text{…}` pour un rendu droit dans la langue cible.
+  Les indices/exposants (`_{…}`, `^{…}`) et les groupes `\text`/`\mathrm`
+  existants sont laissés intacts (identifiants, unités).
 - Option `--math-engine pix2tex` : OCR LaTeX sur les zones détectées, avec
   repli sur la reconstruction géométrique si le résultat est douteux.
 

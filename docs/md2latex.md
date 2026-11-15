@@ -100,6 +100,11 @@ au point d'appel sous forme de `\footnote{…}`.
 - Chaque ligne `$$ … $$` devient `\[ … \]`.
 - Le contenu est déjà du LaTeX (produit par `split_ftpedia.py`) : fractions,
   racines, exposants, `\tag{n}` sont conservés tels quels.
+- Les mots traduits à l'intérieur d'une formule sont déjà encadrés par
+  `\text{…}` (voir `docs/split_ftpedia.md`).
+- Les symboles Unicode (lettres grecques, `∆`, `×`, `≈`, `→`, `°`…) sont
+  convertis en commandes LaTeX : les polices mathématiques Computer Modern
+  n'ont pas ces glyphes et le caractère disparaîtrait silencieusement.
 - La police mathématique reste celle de TeX (Computer Modern) pour l'instant.
 
 ## Langue

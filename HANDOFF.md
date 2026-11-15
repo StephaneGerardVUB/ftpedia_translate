@@ -50,12 +50,14 @@ output/<magazine>/
 - Images : recollage des tuiles contiguës, rendu à `--dpi` (300 par défaut).
 - Tableaux texte → tableaux Markdown.
 - Listes à puces et numérotées (`-`, `1.`).
-- Code (police Courier) → blocs ``` ; code inline en backticks.
+- Code (police Courier) → blocs ``` ; code inline en backticks ; commentaires
+  `//` coupés par la colonne recollés.
 - Gras / italique / gras-italique inline.
 - Liens URI → `[texte](url)`.
 - Notes de bas de page → `[^n]` + définitions `[^n]:`.
 - Maths (CambriaMath) → LaTeX `$$ … $$` (fractions, racines via vinculum,
-  exposants, `\tag{n}`), détection tolérante aux blocs mixtes.
+  exposants, `\tag{n}`), détection tolérante aux blocs mixtes. Les mots en
+  clair des formules sont traduits et placés dans `\text{…}`.
 - Métadonnées catégorie/auteur (lignes `**Kategorie:**`, `**Autor:**`).
 - Titre : appariement robuste TOC/PDF (`title_key`).
 - Traduction : `--translate --engine {azure,deepl,argos,libre}` ;
@@ -86,6 +88,8 @@ python3 split_ftpedia.py --translate-only --name ftpedia-2026-1 \
   code (`lstlisting`), tableaux (`tabularx`, `longtable` si >25 lignes),
   maths `\[…\]`, notes (`\footnote`), images (largeur relative au DPI),
   légendes `\caption*`, figures/tableaux pleine largeur (bascule multicols).
+- Symboles Unicode des formules (grecques, ∆, ×, ≈, →, °…) convertis en
+  commandes LaTeX : les polices mathématiques CM n'ont pas ces glyphes.
 
 Commandes :
 
@@ -110,14 +114,15 @@ python3 md2latex.py --magazine ftpedia-2025-2 --limit 3 --no-fr
 
 ## État actuel
 
-- 7 numéros extraits (PDF par article, `.md`, `.fr.md`, images) :
-  2025-1 (9), 2025-2 (9), 2025-3 (6), 2025-4 (18), 2026-1 (11),
+- 8 numéros extraits (PDF par article, `.md`, `.fr.md`, images) :
+  2024-4 (12), 2025-1 (9), 2025-2 (9), 2025-3 (6), 2025-4 (18), 2026-1 (11),
   2026-2 (10), 2026-3 (6).
 - `md2latex.py` testé sur 3 articles (DE + FR) :
   - `2026-1/01` Sphero BB-8 (images, listes)
   - `2025-2/03` Schräge Drehscheibe (maths, `\tag`, racines)
   - `2025-2/08` Oxocard (code, longs tableaux, 45 images)
   → 6 PDF compilés.
+- `2024-4` extrait + traduit intégralement (12 articles, DeepL).
 
 ## Limites connues
 
