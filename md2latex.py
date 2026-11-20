@@ -88,6 +88,7 @@ MATH_ARTIFACTS = {
     "\u0d6d": "(", "\u1246": "(",      # large opening delimiter
     "\u0d71": ")",                     # large closing delimiter
     "\u0131": "i",                     # dotless i used as a maths variable
+    "\u2e31": "\u00b7",                # word-separator middle dot (4⸱2 -> 4·2)
 }
 
 
@@ -223,7 +224,9 @@ class Converter:
         data_cells = [[self.inline(cell) for cell in row] for row in data]
 
         def render(cells: list[str]) -> str:
-            return " & ".join(cells) + r" \\"
+            first = cells[0] if cells else ""
+            prefix = "{}" if first[:1] in "[*" else ""
+            return prefix + " & ".join(cells) + r" \\"
 
         if len(data) > 25:
             spec = (r"@{}*{" + str(ncols) + r"}{>{\raggedright\arraybackslash}"

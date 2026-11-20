@@ -114,6 +114,8 @@ Voir `docs/split_ftpedia.md` pour le format de la directive et
 - Au-delà de 25 lignes de données, un `longtable` est utilisé pour permettre
   la coupure entre pages (en-tête répété).
 - Les légendes de tableaux sont placées via `\caption*`.
+- Une ligne dont la première cellule commence par `[` ou `*` est préfixée par
+  `{}` : sinon LaTeX lit `\\[` ou `\\*` comme une variante de fin de ligne.
 
 ## Maths
 
